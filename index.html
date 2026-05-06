@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lilydale to Warburton Trail 3D</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.105/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; }
+    #cesiumContainer { width: 100%; height: 100vh; }
+    #weatherPanel {
+      position: absolute; top: 10px; left: 10px; 
+      background: rgba(42, 42, 42, 0.8); color: white; 
+      padding: 15px; border-radius: 5px; font-family: sans-serif;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="weatherPanel">Loading live weather...</div>
+
+  <script>
+    // 1. Initialize Viewer and Token
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkYjI1ZDc3Ny1iZGE3LTRlNGUtOTA1MC1hMjE2NGM1YzI3ODgiLCJpZCI6NDI3NzUxLCJpc3MiOiJodHRwczovL2lvbi5jZXNpdW0uY29tIiwiYXVkIjoidW5kZWZpbmVkX2RlZmF1bHQiLCJpYXQiOjE3NzgwMzg2NjN9.Nihu0JBQlvGbrNzKI66CqxRaDVEeVK7O61gGQ4vAEgQ';
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+      terrainProvider: Cesium.createWorldTerrain()
+    });
+
+    // 2. Include Google Photorealistic 3D Tiles
+    viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+      url: Cesium.IonResource.fromAssetId(2275207) 
+    }));
+
+    // 3. Load & Style the Trail Line
+    const trailPromise = Cesium.GeoJsonDataSource.load('Lilydale_to_Warburton_Rail_Trail.geojson', {
+      stroke: Cesium.Color.WHITE,
+      strokeWidth: 5,
+      clampToGround: true
+    });
+    
+    trailPromise.then(function(dataSource) {
+      viewer.dataSources.add(dataSource);
+      viewer.flyTo(dataSource);
+    });
+
+    // 4. Load & Style Waypoints based on 'Name' Attribute
+    const waypointsPromise = Cesium.GeoJsonDataSource.load('Lilydale_to_Warburton_Rail_Trail_waypoints.geojson');
+    
+    waypointsPromise.then(function(dataSource) {
+      viewer.dataSources.add(dataSource);
+      const entities = dataSource.entities.values;
+
+      for (let i = 0; i < entities.length; i++) {
+        const entity = entities[i];
+        const name = entity.properties.Name ? entity.properties.Name.getValue() : '';
+
+        // Determine color based on attribute
+        let pointColor = Cesium.Color.WHITE; 
+        if (name === 'Car park') pointColor = Cesium.Color.GREY;
+        else if (name.includes('Toilet')) pointColor = Cesium.Color.BLUE;
+        else if (name === 'Picnic table') pointColor = Cesium.Color.GREEN;
+        else if (name.includes('Cafe') || name.includes('Hotel')) pointColor = Cesium.Color.ORANGE;
+        else if (name.includes('Station')) pointColor = Cesium.Color.RED;
+
+        entity.point = new Cesium.PointGraphics({
+          color: pointColor,
+          pixelSize: 12,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+        });
+      }
+    });
+
+    // 5. BONUS: Fetch Live Weather API for the Trail area
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=-37.75&longitude=145.34&current_weather=true')
+      .then(response => response.json())
+      .then(data => {
+        const temp = data.current_weather.temperature;
+        const wind = data.current_weather.windspeed;
+        document.getElementById('weatherPanel').innerHTML = 
+          `<strong>Live Trail Weather</strong><br>Temp: ${temp}°C<br>Wind: ${wind} km/h`;
+      })
+      .catch(err => {
+        document.getElementById('weatherPanel').innerHTML = "Weather data unavailable.";
+      });
+  </script>
+</body>
+</html>
